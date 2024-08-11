@@ -5,9 +5,21 @@
 
 # import the necessary packages
 from imutils import paths
+import time
 import numpy as np
 import argparse
 import cv2
+from Adafruit_IO import RequestError, Client, Feed
+
+aio_username = 'adafruit IO username goes here'
+aio_key = 'adafruit IO key goes here'
+aio = Client(aio_username, aio_key)
+
+try:
+    pet_feeder = aio.feeds('petfeeder')
+except RequestError: #If the Adafruit IO feed doesn't exist, create it
+    pet_feeder_feed = Feed(name='PetFeeder')
+    pet_feeder_feed = aio.create_feed(pet_feeder_feed)
 
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
@@ -24,6 +36,11 @@ CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
            "dog", "horse", "motorbike", "person", "pottedplant", "sheep",
            "sofa", "train", "tvmonitor"]
 COLORS = np.random.uniform(0, 255, size=(len(CLASSES), 3))
+COOLDOWN_PERIOD = 3600
+FEEDER_OPEN_DURATION = 5
+last_detection_time = 0
+door_open_until = 0
+feeder_state = False
 
 # load our serialized model from disk
 print("[INFO] loading model...")
@@ -37,6 +54,15 @@ if not args.get("video", False):
 else:
     camera = cv2.VideoCapture(args["video"])
     print("Showing video from {}\nPress q to quit.".format(args["video"]))
+
+def update_feeder_state(open_feeder):
+    global feeder_state
+    if open_feeder and not feeder_state:
+        aio.send_data(pet_feeder.key, 'ON')
+        feeder_state = True
+    elif not open_feeder and feeder_state:
+        aio.send_data(pet_feeder.key, 'OFF')
+        feeder_state = False
 
 while True:
     # pega o atual frame
@@ -81,8 +107,23 @@ while True:
             cv2.putText(image, label, (startX, y),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, COLORS[idx], 2)
             test_label = CLASSES[idx]
+
+            current_time = time.time()
+
+            if current_time < door_open_until:
+                update_feeder_state(True)
+            else:
+                update_feeder_state(False)
+
             if test_label in ['cat']:
-                print('Detected cat!')
+                if current_time - last_detection_time > COOLDOWN_PERIOD:
+                    print("Cat detected!")
+                    door_open_until = current_time + FEEDER_OPEN_DURATION
+                    last_detection_time = current_time
+                else:
+                    print("Cat detected but within cooldown period.")
+
+            time.sleep(0.1)
         # exibe o quadro
     cv2.imshow("Frame", image)
     key = cv2.waitKey(1) & 0xFF
