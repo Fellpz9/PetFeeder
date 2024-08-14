@@ -11,8 +11,8 @@ import argparse
 import cv2
 from Adafruit_IO import RequestError, Client, Feed
 
-aio_username = 'adafruit IO username goes here'
-aio_key = 'adafruit IO key goes here'
+aio_username = ''
+aio_key = ''
 aio = Client(aio_username, aio_key)
 
 try:
@@ -115,13 +115,13 @@ while True:
             else:
                 update_feeder_state(False)
 
-            if test_label in ['cat']:
+            if test_label in ['cat', 'dog']:
                 if current_time - last_detection_time > COOLDOWN_PERIOD:
-                    print("Cat detected!")
+                    print("Pet detected!")
                     door_open_until = current_time + FEEDER_OPEN_DURATION
                     last_detection_time = current_time
                 else:
-                    print("Cat detected but within cooldown period.")
+                    print("Pet detected but within cooldown period.")
 
             time.sleep(0.1)
         # exibe o quadro
